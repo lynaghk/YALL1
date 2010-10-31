@@ -1,4 +1,4 @@
-function [x, Out] = yall1b6_mod(A, b, opts)
+function [x, Out] = yall1(A, b, opts)
 %
 % A solver for L1-minimization models:
 %
@@ -61,7 +61,7 @@ if isfield(opts,'z0'); z0 = opts.z0; else z0 = []; end
 
 
 % check conflicts % modified by Junfeng
-if posdel && posrho || posdel && posnu || posrho && posnu
+if (posdel && posrho) || (posdel && posnu) || (posrho && posnu)
     fprintf('Model parameter conflict! YALL1: set delta = 0 && nu = 0;\n');
     opts.delta = 0; posdel = false;
     opts.nu = 0;  posnu = false;
@@ -183,9 +183,9 @@ function [x, Out] = yall1_solve(A,At,b,x0,z0,opts)
 % Copyright(c) 2009 Yin Zhang
 
 %% initialization
-m = length(b); sqrtm = sqrt(m); bnrm = norm(b);
+m = length(b); sqrt_m = sqrt(m); bnrm = norm(b);
 [tol,mu,maxit,print,nu,rho,delta, ... 
-    w,nonneg,nonorth,gamma,stepfreq] = get_opts;
+    w,nonneg,nonorth,gamma,stepfreq] = get_opts(A, b, opts);;
 x = x0; z = z0;
 if isempty(x0); x = At(b); end
 n = length(x); 
@@ -195,7 +195,7 @@ end
 if isfield(opts,'nonorth') && opts.nonorth > 0
     y = zeros(m,1); Aty = zeros(n,1); 
 end
-if print; fprintf('--- YALL1 vb6 ---\n'); end
+if print; fprintf('--- YALL1 ---\n'); end
 if print; iprint1(0); end;
 
 rdmu = rho / mu;
@@ -242,7 +242,7 @@ for iter = 1:maxit
     x = x + (gamma*mu) * rd;
     
     %% other chores
-    stop = check_stopping;
+    stop = check_stopping(x, xp, delta, tol, rd, sqrt_m);
     if print > 1; iprint2; end
     if stop; break; end
 
@@ -256,7 +256,7 @@ if print; iprint1(1); end
 
 %% nested functions
     function [tol,mu,maxit,print,nu,rho,delta, ...
-             w,nonneg,nonorth,gamma,stepfreq] = get_opts
+             w,nonneg,nonorth,gamma,stepfreq] = get_opts(A, b, opts)
         % get or set options
         tol = opts.tol;
         mu = mean(abs(b));
@@ -294,7 +294,7 @@ if print; iprint1(1); end
         end
     end
 
-    function stop = check_stopping
+    function stop = check_stopping(x, xp, delta, tol, rd, sqrt_m)
         stop = 0; 
         q = 0.1; % q in [0,1)
         if delta > 0; q = 0; end
@@ -307,7 +307,7 @@ if print; iprint1(1); end
         if xrel_chg >= tol*(1 + q); return; end     
         % check dual residual
         rdnrm = norm(rd);
-        d_feasible = rdnrm < tol*sqrtm;
+        d_feasible = rdnrm < tol*sqrt_m;
         if ~d_feasible; return; end
         % check duality gap
         objp = sum(abs(w.*x));
@@ -348,7 +348,7 @@ if print; iprint1(1); end
                 dgap = abs(objd - objp);
                 rel_gap = dgap / abs(objp);
                 rdnrm = norm(rd);
-                rel_rd = rdnrm / sqrtm;
+                rel_rd = rdnrm / sqrt_m;
                 rpnrm = norm(rp);
                 rel_rp = rpnrm / bnrm;
                 fprintf(' Rel_Dgap  Rel_ResD  Rel_ResP\n');
@@ -376,7 +376,7 @@ if print; iprint1(1); end
         end
         if isfield(opts,'xs') && ~isfield(opts,'nu')
             if iter == 1; Out.error = []; Out.optim = []; end
-            optim = max(dgap/abs(objp), rdnrm/sqrtm); 
+            optim = max(dgap/abs(objp), rdnrm/sqrt_m); 
             if rho == 0; optim = max(optim,rpnrm/bnrm); end
             Out.optim = [Out.optim optim];
             Out.error = [Out.error norm(x-opts.xs)];
