@@ -1,38 +1,20 @@
-clear;
-if ~exist('Utilities','dir'); Run_Me_1st; end
-
-% problem sizes 
-n = 1000; m = 300; k = 15; 
-sigma = 0.00;
-
-% generate (A,xs,b) 
+%random measurement matrix
+n = 1000; %rows
+m = 300;  %columns
 A = randn(m,n);
+
+%signal we will try to reconstruct later
+k = 15;           %how many non-zero coefficients in signal of interest
 xs = zeros(n,1);
-p = randperm(n);
+p = randperm(n);  %pick random coefficients to set
 xs(p(1:k)) = randn(k,1);
-b = A*xs + sigma*randn(m,1); 
 
-% (orth)normalize the rows of A
-if ~exist('nonorth','var'); 
-    nonorth = randn > 0; 
-end
+b = A*xs;
 
-if nonorth;
-    d = 1./sqrt(sum(A.^2,2));
-    A = sparse(1:m,1:m,d)*A;
-    b = d.*b;
-else
-    [Q, R] = qr(A',0);
-    A = Q'; b = R'\b;
-end
+%orthogonalize A and transform our signal b into the new basis
+[Q, R] = qr(A',0);
+A = Q'; b = R'\b;
 
-% call YALL1
-opts.tol = 5e-8;
-if sigma > 0;
-    opts.tol = 5e-3;
-    opts.rho = sigma;
-end
-opts.print = 0;
-[x,Out] = yall1(A, b, opts); 
-fprintf('nonorth: %i, iter = %4i, error = %e\n',...
-    nonorth,Out.iter,norm(x-xs)/norm(xs))
+opts.tol = 5e-8; %set reconstruction stopping tolerance
+[x,Out] = yall1(A, b, opts);
+fprintf('L2 norm error: %e\n', norm(x-xs))
