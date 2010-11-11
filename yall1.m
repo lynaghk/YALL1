@@ -70,7 +70,7 @@ prob = 'the basis pursuit problem';
 if isfield(opts,'rho') && opts.rho > 0,   prob = 'the unconstrained L1L2 problem'; end
 if isfield(opts,'delta') && opts.delta > 0, prob = 'the constrained L1L2 problem';   end
 if isfield(opts,'nu') && opts.nu > 0,    prob = 'the unconstrained L1L1 problem'; end
-disp(['YALL1 is solving ',prob,'.']);
+if isfield(opts, 'print') && opts.print > 0; disp(['YALL1 is solving ', prob, '.']); end
 
 % check zero solution % modified by Junfeng
 Atb = At(b);
