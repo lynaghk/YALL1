@@ -196,7 +196,11 @@ if isfield(opts,'nonorth') && opts.nonorth > 0
     y = zeros(m,1); Aty = zeros(n,1); 
 end
 if print; fprintf('--- YALL1 ---\n'); end
-if print; iprint1(0); end;
+if print
+  rp = A(x) - b;
+  rpnrm = norm(rp);
+  fprintf(" norm( A*x0 - b ) = %6.2e\n",rpnrm);
+end
 
 rdmu = rho / mu;
 rdmu1 = rdmu + 1;
@@ -243,7 +247,33 @@ for iter = 1:maxit
     
     %% other chores
     stop = check_stopping(x, xp, delta, tol, rd, sqrt_m);
-    if print > 1; iprint2; end
+    if print > 1
+        rdnrm = norm(rd);
+        rp = A(x) - b;
+        rpnrm = norm(rp);
+        objp = sum(abs(w.*x));
+        objd = b'*y;
+        if rho > 0
+            objp = objp + (0.5/rho)*(rp'*rp);
+            objd = objd - (0.5*rho)*( y'*y );
+        end
+        dgap = abs(objd - objp);
+        if mod(iter,50) == 0
+          fprintf("  Iter %4i:",iter);
+          fprintf("  Dgap %6.2e",dgap);
+          fprintf("  ResD %6.2e",rdnrm);
+          fprintf("  ResP %6.2e",rpnrm);
+          fprintf("\n");
+        end
+        if isfield(opts,'xs') && ~isfield(opts,'nu')
+          if iter == 1; Out.error = []; Out.optim = []; end
+          optim = max(dgap/abs(objp), rdnrm/sqrt_m); 
+          if rho == 0; optim = max(optim,rpnrm/bnrm); end
+          Out.optim = [Out.optim optim];
+          Out.error = [Out.error norm(x-opts.xs)];
+        end
+    end
+
     if stop; break; end
 
 end % main iterations
@@ -252,7 +282,24 @@ end % main iterations
 Out.z = z;
 Out.iter = iter + 1;
 if iter == maxit; Out.exit = 'Exit: maxiter'; end
-if print; iprint1(1); end
+if print
+  rp = A(x) - b;
+  objp = sum(abs(w.*x));
+  objd = b'*y;
+  if rho > 0
+    objp = objp + (0.5/rho)*(rp'*rp);
+    objd = objd - (0.5*rho)*( y'*y );
+  end
+  dgap = abs(objd - objp);
+  rel_gap = dgap / abs(objp);
+  rdnrm = norm(rd);
+  rel_rd = rdnrm / sqrt_m;
+  rpnrm = norm(rp);
+  rel_rp = rpnrm / bnrm;
+  fprintf(' Rel_Dgap  Rel_ResD  Rel_ResP\n');
+  fprintf(" %8.2e  %8.2e  %8.2e\n",rel_gap,rel_rd,rel_rp);
+end
+
 
 %% nested functions
     function [tol,mu,maxit,print,nu,rho,delta, ...
@@ -284,103 +331,51 @@ if print; iprint1(1); end
     end
 
     function z = proj2box(z,w,nonneg,nu,m)
-        if nonneg
-            z = min(w,real(z));
-            if nu > 0 %L1L1 model
-                z(end-m:end) = max(-1,z(end-m:end));
-            end
-        else
-            z = z .* w ./ max(w,abs(z));
+      if nonneg
+        z = min(w,real(z));
+        if nu > 0 %L1L1 model
+          z(end-m:end) = max(-1,z(end-m:end));
         end
+      else
+        z = z .* w ./ max(w,abs(z));
+      end
     end
 
     function stop = check_stopping(x, xp, delta, tol, rd, sqrt_m)
-        stop = 0; 
-        q = 0.1; % q in [0,1)
-        if delta > 0; q = 0; end
-        % check relative change
-        xrel_chg = norm(x-xp)/norm(x);
-        if xrel_chg < tol*(1 - q)
-            Out.exit = 'Exit: Stablized'; 
-            stop = 1; return; 
-        end
-        if xrel_chg >= tol*(1 + q); return; end     
-        % check dual residual
-        rdnrm = norm(rd);
-        d_feasible = rdnrm < tol*sqrt_m;
-        if ~d_feasible; return; end
-        % check duality gap
-        objp = sum(abs(w.*x));
-        objd = b'*y;
-        if rho > 0
-            rp = A(x) - b; 
-            Out.cntA = Out.cntA + 1;
-            objp = objp + (0.5/rho)*(rp'*rp);
-            objd = objd - (0.5*rho)*( y'*y );
-        end
-        gap_small = abs(objd - objp) < tol*abs(objp);
-        if ~gap_small; return; end
-        % check primal residual
-        if rho == 0; rp = A(x)-b; Out.cntA = Out.cntA + 1; end; 
-        rpnrm = norm(rp);
-        if rho > 0;
-            p_feasible = 1;
-        else
-            p_feasible = rpnrm < tol*bnrm;
-        end
-        if p_feasible; stop = 1; Out.exit = 'Exit: Converged'; end        
+      stop = 0; 
+      q = 0.1; % q in [0,1)
+      if delta > 0; q = 0; end
+      %% check relative change
+      xrel_chg = norm(x-xp)/norm(x);
+      if xrel_chg < tol*(1 - q)
+        Out.exit = 'Exit: Stablized'; 
+        stop = 1; return; 
+      end
+      if xrel_chg >= tol*(1 + q); return; end     
+      %% check dual residual
+      rdnrm = norm(rd);
+      d_feasible = rdnrm < tol*sqrt_m;
+      if ~d_feasible; return; end
+      %% check duality gap
+      objp = sum(abs(w.*x));
+      objd = b'*y;
+      if rho > 0
+        rp = A(x) - b; 
+        Out.cntA = Out.cntA + 1;
+        objp = objp + (0.5/rho)*(rp'*rp);
+        objd = objd - (0.5*rho)*( y'*y );
+      end
+      gap_small = abs(objd - objp) < tol*abs(objp);
+      if ~gap_small; return; end
+      %% check primal residual
+      if rho == 0; rp = A(x)-b; Out.cntA = Out.cntA + 1; end; 
+      rpnrm = norm(rp);
+      if rho > 0;
+        p_feasible = 1;
+      else
+        p_feasible = rpnrm < tol*bnrm;
+      end
+      if p_feasible; stop = 1; Out.exit = 'Exit: Converged'; end        
     end
-
-    function iprint1(mode)
-        switch mode;
-            case 0; % at the beginning
-                rp = A(x) - b;
-                rpnrm = norm(rp);
-                fprintf(' norm( A*x0 - b ) = %6.2e\n',rpnrm);
-            case 1; % at the end
-                rp = A(x) - b;
-                objp = sum(abs(w.*x));
-                objd = b'*y;
-                if rho > 0
-                    objp = objp + (0.5/rho)*(rp'*rp);
-                    objd = objd - (0.5*rho)*( y'*y );
-                end
-                dgap = abs(objd - objp);
-                rel_gap = dgap / abs(objp);
-                rdnrm = norm(rd);
-                rel_rd = rdnrm / sqrt_m;
-                rpnrm = norm(rp);
-                rel_rp = rpnrm / bnrm;
-                fprintf(' Rel_Dgap  Rel_ResD  Rel_ResP\n');
-                fprintf(' %8.2e  %8.2e  %8.2e\n',rel_gap,rel_rd,rel_rp);
-        end
-    end
-
-    function iprint2
-        rdnrm = norm(rd);
-        rp = A(x) - b;
-        rpnrm = norm(rp);
-        objp = sum(abs(w.*x));
-        objd = b'*y;
-        if rho > 0
-            objp = objp + (0.5/rho)*(rp'*rp);
-            objd = objd - (0.5*rho)*( y'*y );
-        end
-        dgap = abs(objd - objp);
-        if mod(iter,50) == 0
-        fprintf('  Iter %4i:',iter);
-        fprintf('  Dgap %6.2e',dgap);
-        fprintf('  ResD %6.2e',rdnrm);
-        fprintf('  ResP %6.2e',rpnrm);
-        fprintf('\n');
-        end
-        if isfield(opts,'xs') && ~isfield(opts,'nu')
-            if iter == 1; Out.error = []; Out.optim = []; end
-            optim = max(dgap/abs(objp), rdnrm/sqrt_m); 
-            if rho == 0; optim = max(optim,rpnrm/bnrm); end
-            Out.optim = [Out.optim optim];
-            Out.error = [Out.error norm(x-opts.xs)];
-        end
-    end
-
+    
 end
