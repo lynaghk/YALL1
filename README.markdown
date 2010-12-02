@@ -11,7 +11,7 @@
 
 
 YALL1 is an Matlab/Octave package for solving eight different L1-norm minimization problems.
-
+For more details, see [http://www.dirigibleFlightcraft.com/YALL1/](http://www.dirigibleFlightcraft.com/YALL1/).
 Download the latest version via git:
 
     git clone http://github.com/lynaghk/YALL1/
